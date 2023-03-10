@@ -1,0 +1,105 @@
+version: "3"
+services:
+  db:
+    image: postgres
+    container_name: db
+    environment: 
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres 
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - ../blog-post-backend/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth-db:
+    image: postgres
+    container_name: auth-db
+    environment: 
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres 
+      POSTGRES_DB: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - ../auth/database/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: redis
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  auth:
+    build: 
+      context: ../auth
+    container_name: auth
+    ports:
+      - "5000:5000"
+    depends_on:
+      auth-db: 
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  server:
+    build: 
+      context: ../blog-post-backend
+    container_name: server
+    ports:
+      - "8080:8080"
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8080/blog-posts"]
+    #   interval: 10s
+    #   timeout: 5s
+    #   retries: 5
+    environment:
+      - DB_USER=postgres
+      - DB_PASS=postgres
+      - POSTGRESQL_DB_NAME=postgres
+
+    depends_on:
+      db: 
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  # frontend:
+  #   build: 
+  #     context: ../blog-post-frontend
+  #   container_name: frontend
+  #   ports:
+  #     - "3000:3000"
+
+  migration-backend:
+    build: 
+      context: ../blog-post-backend
+      dockerfile: Dockerfile.migration
+    container_name: migration-backend
+    depends_on:
+      db: 
+        condition: service_healthy
+    environment:
+      - NODE_ENV=docker 
+  migration-auth:
+    build: 
+      context: ../auth
+      dockerfile: Dockerfile.migration
+    container_name: migration-auth
+    depends_on:
+      auth-db: 
+        condition: service_healthy
+    
+    
